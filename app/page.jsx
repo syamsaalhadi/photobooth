@@ -135,6 +135,7 @@ export default function PhotoBooth() {
   const [phase, setPhase] = useState('idle')
   const [photoUrl, setPhotoUrl] = useState(null)
   const [selectedTheme, setSelectedTheme] = useState(THEMES[0])
+  const [facingMode, setFacingMode] = useState('user')
   const [uploading, setUploading] = useState(false)
   const [uploaded, setUploaded] = useState(false)
   const [logoClickCount, setLogoClickCount] = useState(0)
@@ -161,10 +162,12 @@ export default function PhotoBooth() {
       const ctx = canvas.getContext('2d')
       canvas.width = 640
       canvas.height = 480
-      // Mirror + filter
+      // Mirror if front camera + filter
       ctx.save()
-      ctx.translate(640, 0)
-      ctx.scale(-1, 1)
+      if (facingMode === 'user') {
+        ctx.translate(640, 0)
+        ctx.scale(-1, 1)
+      }
       ctx.filter = selectedTheme.filter
       ctx.drawImage(video, 0, 0, 640, 480)
       ctx.restore()
@@ -176,12 +179,15 @@ export default function PhotoBooth() {
 
     animFrameRef.current = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(animFrameRef.current)
-  }, [phase, selectedTheme])
+  }, [phase, selectedTheme, facingMode])
 
-  const startCamera = async () => {
+  const startCamera = async (mode = facingMode) => {
     try {
+      // Stop existing tracks if any
+      streamRef.current?.getTracks().forEach(t => t.stop())
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: 640, height: 480 },
+        video: { facingMode: mode, width: 640, height: 480 },
         audio: false
       })
       streamRef.current = stream
@@ -242,6 +248,13 @@ export default function PhotoBooth() {
     streamRef.current?.getTracks().forEach(t => t.stop())
     setPhase('idle')
     setPhotoUrl(null)
+    setFacingMode('user') // Reset to default
+  }
+
+  const toggleCamera = () => {
+    const newMode = facingMode === 'user' ? 'environment' : 'user'
+    setFacingMode(newMode)
+    startCamera(newMode)
   }
 
   return (
@@ -306,6 +319,13 @@ export default function PhotoBooth() {
               📸 Ambil Foto!
             </button>
             <button
+              onClick={toggleCamera}
+              className="bg-blue-500 hover:bg-blue-400 text-white font-bold px-5 py-4 rounded-full shadow-lg transition"
+              title="Ganti Kamera"
+            >
+              🔄
+            </button>
+            <button
               onClick={stopCamera}
               className="bg-gray-200 hover:bg-gray-300 text-gray-600 font-semibold px-5 py-4 rounded-full transition"
             >
@@ -313,48 +333,51 @@ export default function PhotoBooth() {
             </button>
           </div>
         </div>
-      )}
+      )
+      }
 
       {/* Result */}
-      {phase === 'result' && photoUrl && (
-        <div className="flex flex-col items-center gap-5 w-full max-w-lg">
-          <p className="text-purple-700 font-bold text-xl">✨ Foto kamu siap!</p>
+      {
+        phase === 'result' && photoUrl && (
+          <div className="flex flex-col items-center gap-5 w-full max-w-lg">
+            <p className="text-purple-700 font-bold text-xl">✨ Foto kamu siap!</p>
 
-          <img
-            src={photoUrl}
-            className="w-full rounded-3xl shadow-2xl border-4 border-white"
-          />
+            <img
+              src={photoUrl}
+              className="w-full rounded-3xl shadow-2xl border-4 border-white"
+            />
 
-          <div className="text-xs text-gray-400">
-            {uploading && '⏳ Menyimpan...'}
-            {uploaded && !uploading && '✅ Tersimpan'}
+            <div className="text-xs text-gray-400">
+              {uploading && '⏳ Menyimpan...'}
+              {uploaded && !uploading && '✅ Tersimpan'}
+            </div>
+
+            <div className="flex gap-3 flex-wrap justify-center">
+              <button
+                onClick={downloadPhoto}
+                className="bg-green-500 hover:bg-green-400 text-white font-bold px-8 py-3 rounded-full shadow-lg transition"
+              >
+                💾 Simpan Foto
+              </button>
+              <button
+                onClick={retake}
+                className="bg-purple-500 hover:bg-purple-400 text-white font-bold px-8 py-3 rounded-full shadow-lg transition"
+              >
+                🔄 Foto Lagi
+              </button>
+              <button
+                onClick={stopCamera}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-600 font-semibold px-6 py-3 rounded-full transition"
+              >
+                ✕ Selesai
+              </button>
+            </div>
           </div>
-
-          <div className="flex gap-3 flex-wrap justify-center">
-            <button
-              onClick={downloadPhoto}
-              className="bg-green-500 hover:bg-green-400 text-white font-bold px-8 py-3 rounded-full shadow-lg transition"
-            >
-              💾 Simpan Foto
-            </button>
-            <button
-              onClick={retake}
-              className="bg-purple-500 hover:bg-purple-400 text-white font-bold px-8 py-3 rounded-full shadow-lg transition"
-            >
-              🔄 Foto Lagi
-            </button>
-            <button
-              onClick={stopCamera}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-600 font-semibold px-6 py-3 rounded-full transition"
-            >
-              ✕ Selesai
-            </button>
-          </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Video hidden */}
       <video ref={videoRef} autoPlay playsInline muted className="hidden" />
-    </main>
+    </main >
   )
 }
